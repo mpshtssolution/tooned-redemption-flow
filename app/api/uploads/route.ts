@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-').slice(-120)
     const blob = await put(`redemptions/${crypto.randomUUID()}-${safeName}`, file, {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
     })
 
