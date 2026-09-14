@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 type Step = 'welcome' | 'details' | 'create' | 'extras' | 'delivery' | 'done'
 type Extra = 'print' | 'frame' | 'second' | 'rush' | ''
@@ -21,6 +21,12 @@ export default function Home() {
   const [uploaded, setUploaded] = useState(false)
   const [fileName, setFileName] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const qrCode = params.get('code')
+    if (qrCode) setCode(qrCode.toUpperCase())
+  }, [])
 
   const steps: Step[] = ['welcome', 'details', 'create', 'extras', 'delivery']
   const index = steps.indexOf(step)
