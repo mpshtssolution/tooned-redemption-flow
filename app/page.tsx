@@ -37,6 +37,42 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search)
     const qrCode = params.get('code')
     if (qrCode) setCode(qrCode.toUpperCase())
+
+    const returnedRedemption = params.get('redemption_id')
+    const payment = params.get('payment')
+    if (!returnedRedemption) return
+
+    setRedemptionId(returnedRedemption)
+    if (payment === 'cancelled') {
+      setActionError('Payment was cancelled. Your gift is still safe — you can return to the review and try again.')
+      return
+    }
+
+    if (payment === 'success') {
+      let attempts = 0
+      const loadStatus = async () => {
+        try {
+          const response = await fetch(`/api/redemptions/status?id=${encodeURIComponent(returnedRedemption)}`)
+          const data = await response.json()
+          if (response.ok && data.ok) {
+            const r = data.redemption
+            setName(r.name || '')
+            setEmail(r.email || '')
+            setAddress(r.address || '')
+            setPhone(r.phone || '')
+            setPhotoUrl(r.photo_url || '')
+            if (r.gift_status === 'redeemed' && r.status === 'ready_for_fulfillment') {
+              setStep('done')
+              return
+            }
+          }
+        } catch {}
+        attempts += 1
+        if (attempts < 6) window.setTimeout(loadStatus, 1500)
+        else setActionError('Payment was received, but we’re still confirming your redemption. Please refresh in a moment.')
+      }
+      void loadStatus()
+    }
   }, [])
 
   const steps: Step[] = ['welcome', 'details', 'create', 'extras', 'delivery', 'review']
@@ -101,11 +137,23 @@ export default function Home() {
     if (!deliveryValid || !redemptionId) return
     setFinishing(true); setActionError('')
     try {
+      if (selectedExtra) {
+        const response = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ redemptionId, code, upgradeKey: extra, address, phone, photoUrl }),
+        })
+        const data = await response.json()
+        if (!response.ok || !data.ok || !data.url) throw new Error(data.reason || 'checkout_failed')
+        window.location.href = data.url
+        return
+      }
+
       const response = await fetch('/api/redemptions/finalize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ redemptionId, code, address, phone, photoUrl }) })
       const data = await response.json()
       if (!response.ok || !data.ok) throw new Error(data.reason || 'finalize_failed')
       next('done')
-    } catch { setActionError('We couldn’t confirm your gift just yet. Please try again.') }
+    } catch { setActionError(selectedExtra ? 'We couldn’t open secure payment. Please try again.' : 'We couldn’t confirm your gift just yet. Please try again.') }
     finally { setFinishing(false) }
   }
 
@@ -124,9 +172,9 @@ export default function Home() {
 
     {step === 'delivery' && <main><div className="grid"><section><div className="step">05 / Almost there</div><h1 className="display">Where should<br/>we <em>send it?</em></h1><p className="lede">One last thing. Then we’ll get your portrait moving.</p><div className="shippingNote"><span>↗</span><div><strong>Made for you. Sent to you.</strong><small>We’ll only use your number for delivery updates.</small></div></div></section><section className="card"><div className="field"><label>DELIVERY ADDRESS</label><textarea rows={4} placeholder="House / Flat, street, city, state, PIN" value={address} onChange={e => setAddress(e.target.value)} /></div><div className="field"><label>PHONE NUMBER</label><input placeholder="+91 98765 43210" value={phone} onChange={e => setPhone(e.target.value)} /></div><div className="price"><span>Tooned portrait</span><span className="free">₹0 · Gift</span></div>{selectedExtra && <div className="price compact"><span>{selectedExtra.name}</span><span>+ ₹{price.toLocaleString('en-IN')}</span></div>}{touched && !deliveryValid && <p className="error">Add a complete delivery address and 10-digit phone number.</p>}{actionError && <p className="error">{actionError}</p>}<div className="actions"><button className="back" onClick={() => next('extras')}>← Back</button><button className="btn" onClick={() => { setTouched(true); if (deliveryValid) next('review') }}>{selectedExtra ? `Review ₹${price.toLocaleString('en-IN')} →` : 'Review my gift →'}</button></div></section></div></main>}
 
-    {step === 'review' && <main><div className="grid"><section><div className="step">06 / One last look</div><h1 className="display">Looks <em>good?</em></h1><p className="lede">Take a final look before we make it official.</p><div className="shippingNote"><span>✦</span><div><strong>Your portrait is included</strong><small>{selectedExtra ? 'You’ve added one optional upgrade.' : 'No payment is needed for your gift.'}</small></div></div></section><section className="card"><div className="reviewPhoto">{preview && <img src={preview} alt="Your selected portrait" />}</div><div className="price first"><span>Name</span><strong>{name}</strong></div><div className="price"><span>Email</span><span>{email}</span></div><div className="price"><span>Delivery</span><span>{address}</span></div><div className="price"><span>Portrait</span><span className="free">Included · ₹0</span></div>{selectedExtra && <div className="price"><span>{selectedExtra.name}</span><span>₹{price.toLocaleString('en-IN')}</span></div>}<div className="actions"><button className="back" onClick={() => next('delivery')}>← Back</button><button className="btn" disabled={finishing} onClick={confirmGift}>{finishing ? 'Confirming…' : selectedExtra ? `Continue to payment →` : 'Confirm my gift →'}</button></div>{selectedExtra && <p className="tiny" style={{ marginTop: 12 }}>Payment for the upgrade will be added in the next step.</p>}{actionError && <p className="error">{actionError}</p>}</section></div></main>}
+    {step === 'review' && <main><div className="grid"><section><div className="step">06 / One last look</div><h1 className="display">Looks <em>good?</em></h1><p className="lede">Take a final look before we make it official.</p><div className="shippingNote"><span>✦</span><div><strong>Your portrait is included</strong><small>{selectedExtra ? 'You’ve added one optional upgrade.' : 'No payment is needed for your gift.'}</small></div></div></section><section className="card"><div className="reviewPhoto">{preview && <img src={preview} alt="Your selected portrait" />}</div><div className="price first"><span>Name</span><strong>{name}</strong></div><div className="price"><span>Email</span><span>{email}</span></div><div className="price"><span>Delivery</span><span>{address}</span></div><div className="price"><span>Portrait</span><span className="free">Included · ₹0</span></div>{selectedExtra && <div className="price"><span>{selectedExtra.name}</span><span>₹{price.toLocaleString('en-IN')}</span></div>}<div className="actions"><button className="back" onClick={() => next('delivery')}>← Back</button><button className="btn" disabled={finishing} onClick={confirmGift}>{finishing ? (selectedExtra ? 'Opening payment…' : 'Confirming…') : selectedExtra ? `Pay ₹${price.toLocaleString('en-IN')} securely →` : 'Confirm my gift →'}</button></div>{selectedExtra && <p className="tiny" style={{ marginTop: 12 }}>You’ll be redirected to secure Stripe Checkout. Your free gift remains yours either way.</p>}{actionError && <p className="error">{actionError}</p>}</section></div></main>}
 
-    {step === 'done' && <main className="doneMain"><section className="success"><div className="check">✓</div><div className="step">You’re officially Tooned</div><h1>That’s a<br/><em>wrap.</em></h1><p>Your portrait is on its way to becoming your new favourite thing. We’ll send the details to <strong>{email || 'your email'}</strong>.</p><div className="nextSteps"><div><span>01</span><strong>We create your portrait</strong></div><i>↓</i><div><span>02</span><strong>We print it beautifully</strong></div><i>↓</i><div><span>03</span><strong>We send it your way</strong></div></div><div className="card receipt"><div className="price first"><span>Gift code</span><strong className="mono">{code}</strong></div><div className="price"><span>Portrait</span><span className="free">Included</span></div><div className="price"><span>Order status</span><strong>Confirmed ✦</strong></div></div><button className="btn" style={{ height: 52, marginTop: 25, padding: '0 30px' }} onClick={() => setStep('welcome')}>Back to beginning ↗</button></section></main>}
+    {step === 'done' && <main className="doneMain"><section className="success"><div className="check">✓</div><div className="step">You’re officially Tooned</div><h1>That’s a<br/><em>wrap.</em></h1><p>Your portrait is on its way to becoming your new favourite thing. We’ll send the details to <strong>{email || 'your email'}</strong>.</p><div className="nextSteps"><div><span>01</span><strong>We create your portrait</strong></div><i>↓</i><div><span>02</span><strong>We print it beautifully</strong></div><i>↓</i><div><span>03</span><strong>We send it your way</strong></div></div><div className="card receipt"><div className="price first"><span>Gift code</span><strong className="mono">{code}</strong></div><div className="price"><span>Portrait</span><span className="free">Included</span></div>{selectedExtra && <div className="price"><span>{selectedExtra.name}</span><span>₹{price.toLocaleString('en-IN')}</span></div>}<div className="price"><span>Order status</span><strong>Confirmed ✦</strong></div></div><button className="btn" style={{ height: 52, marginTop: 25, padding: '0 30px' }} onClick={() => setStep('welcome')}>Back to beginning ↗</button></section></main>}
   </div>
 }
 
