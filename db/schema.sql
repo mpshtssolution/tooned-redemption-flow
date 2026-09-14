@@ -25,9 +25,16 @@ CREATE TABLE IF NOT EXISTS redemptions (
   completed_at TIMESTAMPTZ
 );
 
-ALTER TABLE gift_codes
-  ADD CONSTRAINT gift_codes_redemption_fk
-  FOREIGN KEY (redemption_id) REFERENCES redemptions(id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'gift_codes_redemption_fk'
+  ) THEN
+    ALTER TABLE gift_codes
+      ADD CONSTRAINT gift_codes_redemption_fk
+      FOREIGN KEY (redemption_id) REFERENCES redemptions(id);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
