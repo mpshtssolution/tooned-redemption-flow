@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { getDb } from '../../lib/db'
 
@@ -21,44 +21,42 @@ export async function POST(request: Request) {
     }
 
     const sql = getDb()
-    const rows = await sql.transaction([
+    const redemptionId = randomUUID()
+    const giftHash = hashCode(normalized)
+
+    const results = await sql.transaction([
       sql`
         SELECT id, status, redemption_id
         FROM gift_codes
-        WHERE code_hash = ${hashCode(normalized)}
+        WHERE code_hash = ${giftHash}
         FOR UPDATE
       `,
       sql`
-        SELECT 1
-        WHERE false
+        INSERT INTO redemptions (id, gift_code_id, name, email, status)
+        SELECT ${redemptionId}, id, ${name}, ${email}, 'started'
+        FROM gift_codes
+        WHERE code_hash = ${giftHash} AND status = 'active'
+        RETURNING id, status
+      `,
+      sql`
+        UPDATE gift_codes
+        SET status = 'in_progress', redemption_id = ${redemptionId}
+        WHERE code_hash = ${giftHash} AND status = 'active'
+        RETURNING id, status, redemption_id
       `,
     ])
 
-    const gift = rows[0][0] as { id: string; status: string; redemption_id: string | null } | undefined
+    const gift = results[0][0] as { id: string; status: string; redemption_id: string | null } | undefined
     if (!gift) return NextResponse.json({ ok: false, reason: 'not_found' }, { status: 404 })
     if (gift.status === 'redeemed') return NextResponse.json({ ok: false, reason: 'already_redeemed' }, { status: 409 })
     if (gift.status === 'void' || gift.status === 'expired') {
       return NextResponse.json({ ok: false, reason: gift.status }, { status: 410 })
     }
-
     if (gift.status === 'in_progress' && gift.redemption_id) {
       return NextResponse.json({ ok: true, redemptionId: gift.redemption_id, status: 'in_progress' })
     }
 
-    const redemptionRows = await sql`
-      INSERT INTO redemptions (gift_code_id, name, email, status)
-      VALUES (${gift.id}, ${name}, ${email}, 'started')
-      RETURNING id, status
-    `
-
-    const redemption = redemptionRows[0]
-    await sql`
-      UPDATE gift_codes
-      SET status = 'in_progress', redemption_id = ${redemption.id}
-      WHERE id = ${gift.id}
-    `
-
-    return NextResponse.json({ ok: true, redemptionId: redemption.id, status: redemption.status })
+    return NextResponse.json({ ok: true, redemptionId, status: 'started' })
   } catch (error) {
     console.error('Redemption start failed', error)
     return NextResponse.json({ ok: false, reason: 'server_error' }, { status: 500 })
