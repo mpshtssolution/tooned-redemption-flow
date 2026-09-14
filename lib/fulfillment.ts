@@ -71,12 +71,12 @@ export async function exportRedemption(redemptionId: string) {
       createdAt: new Date(row.created_at).toISOString(),
     }
 
-    const response = await fetch(webhookUrl, {
+    const url = new URL(webhookUrl)
+    url.searchParams.set('token', secret)
+
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tooned-Secret': secret,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       cache: 'no-store',
     })
