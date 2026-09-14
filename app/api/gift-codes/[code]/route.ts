@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { NextResponse } from 'next/server'
-import { getDb } from '../../../lib/db'
+import { getDb } from '../../../../lib/db'
 
 function hashCode(code: string) {
   return createHash('sha256').update(code.trim().toUpperCase()).digest('hex')
