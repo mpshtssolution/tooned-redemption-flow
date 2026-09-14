@@ -1,3 +1,5 @@
+import { getDb } from './db'
+
 type FulfillmentPayload = {
   redemptionId: string
   giftCodeLast4: string
@@ -12,7 +14,7 @@ type FulfillmentPayload = {
   createdAt: string
 }
 
-export async function exportFulfillment(payload: FulfillmentPayload) {
+export async function exportRedemption(redemptionId: string) {
   const webhookUrl = process.env.GOOGLE_SHEETS_WEBHOOK_URL
   const secret = process.env.GOOGLE_SHEETS_WEBHOOK_SECRET
 
@@ -22,6 +24,53 @@ export async function exportFulfillment(payload: FulfillmentPayload) {
   }
 
   try {
+    const sql = getDb()
+    const rows = await sql`
+      SELECT
+        r.id,
+        g.code_last4,
+        r.name,
+        r.email,
+        r.phone,
+        r.address,
+        r.photo_url,
+        o.upgrade_key,
+        COALESCE(o.amount_inr, 0) AS amount_inr,
+        COALESCE(o.payment_status, 'not_required') AS payment_status,
+        r.created_at
+      FROM redemptions r
+      JOIN gift_codes g ON g.id = r.gift_code_id
+      LEFT JOIN LATERAL (
+        SELECT upgrade_key, amount_inr, payment_status
+        FROM orders
+        WHERE redemption_id = r.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) o ON true
+      WHERE r.id = ${redemptionId}
+      LIMIT 1
+    `
+
+    if (rows.length === 0) {
+      console.error('Fulfillment export skipped: redemption not found', redemptionId)
+      return { ok: false, skipped: true }
+    }
+
+    const row = rows[0]
+    const payload: FulfillmentPayload = {
+      redemptionId: String(row.id),
+      giftCodeLast4: String(row.code_last4 ?? ''),
+      name: row.name ? String(row.name) : null,
+      email: row.email ? String(row.email) : null,
+      phone: row.phone ? String(row.phone) : null,
+      address: row.address ? String(row.address) : null,
+      photoUrl: row.photo_url ? String(row.photo_url) : null,
+      upgradeKey: row.upgrade_key ? String(row.upgrade_key) : null,
+      amountInr: Number(row.amount_inr ?? 0),
+      paymentStatus: String(row.payment_status ?? 'not_required'),
+      createdAt: new Date(row.created_at).toISOString(),
+    }
+
     const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
