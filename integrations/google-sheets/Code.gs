@@ -4,7 +4,10 @@ const SHEET_NAME = 'Redemptions'
 
 function doPost(e) {
   try {
-    const token = String(e?.parameter?.token || '')
+    const queryToken = String(e?.parameter?.token || '')
+    const headerToken = String(e?.parameter?.['X-Tooned-Secret'] || '')
+    const token = queryToken || headerToken
+
     if (!WEBHOOK_SECRET || token !== WEBHOOK_SECRET) {
       return json_({ ok: false, reason: 'unauthorized' })
     }
@@ -30,6 +33,7 @@ function doPost(e) {
       Number(payload.amountInr || 0),
       payload.paymentStatus || 'not_required',
       payload.createdAt || new Date().toISOString(),
+      'New',
     ]
 
     const row = findRedemptionRow_(sheet, payload.redemptionId)
@@ -37,13 +41,13 @@ function doPost(e) {
     if (row) {
       sheet.getRange(row, 1, 1, values.length).setValues([values])
     } else {
-      sheet.appendRow(values.concat(['New']))
+      sheet.appendRow(values)
     }
 
     return json_({ ok: true })
   } catch (error) {
     console.error(error)
-    return json_({ ok: false, reason: 'server_error' })
+    return json_({ ok: false, reason: String(error?.message || 'server_error') })
   }
 }
 
