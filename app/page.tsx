@@ -5,11 +5,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 type Step = 'welcome' | 'details' | 'create' | 'extras' | 'delivery' | 'done'
 type Extra = 'print' | 'frame' | 'second' | 'rush' | ''
 
-const extraData: Record<Exclude<Extra, ''>, { name: string; detail: string; price: number }> = {
-  print: { name: 'Big fancy print', detail: '12 × 16 in · museum-quality paper', price: 899 },
-  frame: { name: 'Premium frame', detail: 'Solid oak finish · ready to hang', price: 1499 },
-  second: { name: 'One more portrait', detail: 'A second Tooned human · same order', price: 699 },
-  rush: { name: 'Skip the queue', detail: 'Priority dispatch · ships sooner', price: 299 },
+const extraData: Record<Exclude<Extra, ''>, { name: string; detail: string; price: number; tag: string }> = {
+  print: { name: 'Make it big', detail: '12 × 16 in · museum-quality paper', price: 899, tag: 'BIG' },
+  frame: { name: 'Put a frame on it', detail: 'Solid oak finish · ready to hang', price: 1499, tag: 'FRAME' },
+  second: { name: 'Toon someone else', detail: 'A second Tooned human · same order', price: 699, tag: 'TWO' },
+  rush: { name: 'Skip the queue', detail: 'Priority dispatch · ships sooner', price: 299, tag: 'FAST' },
 }
 
 export default function Home() {
@@ -20,6 +20,10 @@ export default function Home() {
   const [extra, setExtra] = useState<Extra>('')
   const [uploaded, setUploaded] = useState(false)
   const [fileName, setFileName] = useState('')
+  const [preview, setPreview] = useState('')
+  const [address, setAddress] = useState('')
+  const [phone, setPhone] = useState('')
+  const [touched, setTouched] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -33,6 +37,8 @@ export default function Home() {
   const progress = step === 'done' ? 100 : Math.max(8, ((index + 1) / steps.length) * 100)
   const selectedExtra = extra ? extraData[extra] : null
   const price = useMemo(() => selectedExtra?.price ?? 0, [selectedExtra])
+  const detailsValid = name.trim().length > 1 && email.includes('@')
+  const deliveryValid = address.trim().length > 8 && phone.replace(/\D/g, '').length >= 10
   const next = (s: Step) => setStep(s)
 
   function handleFile(file?: File) {
@@ -40,25 +46,71 @@ export default function Home() {
     if (!file.type.startsWith('image/') || file.size > 10 * 1024 * 1024) return
     setUploaded(true)
     setFileName(file.name)
+    setPreview(URL.createObjectURL(file))
   }
 
   return <div className="shell">
     <div className="grain" />
-    <header className="top"><div className="logo">TOONED<span>®</span></div><div className="pill">Your gift · Included</div></header>
+    <header className="top">
+      <button className="logo" onClick={() => setStep('welcome')} aria-label="Back to beginning">TOONED<span>®</span></button>
+      <div className="pill">Your gift · Included</div>
+    </header>
     <div className="progress"><i style={{ width: `${progress}%` }} /></div>
 
-    {step === 'welcome' && <main><span className="float f1">made for you ↗</span><span className="float f2">✦</span><div className="grid"><section className="hero"><div className="step">01 / Your gift</div><h1>Your portrait is <em>waiting.</em></h1><p className="lede">Someone thought you deserved a little more personality. Your custom Tooned portrait is already yours — just make it you.</p><div className="codebox"><input value={code} onChange={e => setCode(e.target.value)} aria-label="Gift code" /><button className="btn" onClick={() => next('details')}>Let’s go →</button></div><p className="tiny">Gift code detected · no payment needed for your portrait</p></section><Art /></div></main>}
+    {step === 'welcome' && <main className="welcomeMain">
+      <span className="float f1">made for you ↗</span><span className="float f2">✦</span>
+      <div className="grid welcomeGrid">
+        <section className="hero">
+          <div className="step">01 / Your gift</div>
+          <h1>Your portrait is <em>waiting.</em></h1>
+          <p className="lede">Someone thought you deserved a little more personality. Your custom Tooned portrait is already yours — just make it you.</p>
+          <div className="giftLine"><span>✦</span> No shopping. No checkout. Just your portrait.</div>
+          <div className="codebox"><input value={code} onChange={e => setCode(e.target.value.toUpperCase())} aria-label="Gift code" /><button className="btn" onClick={() => next('details')}>Let’s go →</button></div>
+          <p className="tiny">Gift code detected · your portrait is included</p>
+        </section>
+        <Art />
+      </div>
+    </main>}
 
-    {step === 'details' && <main><div className="grid"><section><div className="step">02 / About you</div><h1 className="display">Okay, who are we<br/><em>tooning?</em></h1><p className="lede">Just the basics. We’ll use these to send your portrait into the world.</p></section><section className="card"><div className="field"><label>YOUR NAME</label><input placeholder="e.g. Ankur" value={name} onChange={e => setName(e.target.value)} /></div><div className="field"><label>EMAIL ADDRESS</label><input type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} /></div><div className="actions"><button className="back" onClick={() => next('welcome')}>← Back</button><button className="btn" onClick={() => next('create')}>Create my portrait →</button></div></section></div></main>}
+    {step === 'details' && <main><div className="grid">
+      <section><div className="step">02 / About you</div><h1 className="display">Okay, who are we<br/><em>tooning?</em></h1><p className="lede">Name. Email. Then we get to the fun bit.</p></section>
+      <section className="card">
+        <div className="field"><label>YOUR NAME</label><input autoFocus placeholder="e.g. Ankur" value={name} onChange={e => setName(e.target.value)} /></div>
+        <div className="field"><label>EMAIL ADDRESS</label><input type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} /></div>
+        <div className="cardHint">We’ll send your confirmation and delivery updates here.</div>
+        <div className="actions"><button className="back" onClick={() => next('welcome')}>← Back</button><button className="btn" disabled={!detailsValid} onClick={() => next('create')}>Create my portrait →</button></div>
+      </section>
+    </div></main>}
 
-    {step === 'create' && <main><div className="grid"><section><div className="step">03 / Make it yours</div><h1 className="display">Give us your<br/><em>good side.</em></h1><p className="lede">One clear photo is all we need. We’ll take it from here. No filters, no overthinking.</p><div className="actions"><button className="back" onClick={() => next('details')}>← Back</button></div></section><section className="card"><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => handleFile(e.target.files?.[0])} /><div className={`upload ${uploaded ? 'uploaded' : ''}`} onClick={() => fileRef.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]) }}>{uploaded ? <div><div className="uploadIcon">✓</div><b>Photo added ✦</b><span>{fileName || 'Looking good. We’re ready.'}</span><small>Click to choose another</small></div> : <div><div className="uploadIcon">↑</div><b>Drop your photo here</b><span>or click to choose from your device</span><small>We recommend a clear, front-facing photo</small></div>}</div><div className="actions"><span className="tiny">JPG / PNG / WEBP · up to 10MB</span><button className="btn" disabled={!uploaded} onClick={() => next('extras')}>Looks good →</button></div></section></div></main>}
+    {step === 'create' && <main><div className="grid">
+      <section><div className="step">03 / Make it yours</div><h1 className="display">Give us your<br/><em>good side.</em></h1><p className="lede">One good photo. That’s all we need. We’ll handle the toon-ing.</p><div className="photoRules"><span>01</span><div><strong>Clear face</strong><small>Front-facing works best</small></div><span>02</span><div><strong>Good light</strong><small>No sunglasses, please</small></div></div><div className="actions"><button className="back" onClick={() => next('details')}>← Back</button></div></section>
+      <section className="card uploadCard">
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => handleFile(e.target.files?.[0])} />
+        <div className={`upload ${uploaded ? 'uploaded' : ''}`} onClick={() => fileRef.current?.click()} onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]) }}>
+          {uploaded ? <><div className="previewWrap">{preview && <img src={preview} alt="Selected portrait preview" />}<div className="previewCheck">✓</div></div><div className="uploadSuccess"><b>Photo looks good ✦</b><span>{fileName}</span><small>Click to choose another</small></div></> : <div><div className="uploadIcon">↑</div><b>Drop your photo here</b><span>or click to choose from your device</span><small>Clear face · good light · no filters needed</small></div>}
+        </div>
+        <div className="uploadFoot"><span className="tiny">JPG / PNG / WEBP · up to 10MB</span><button className="btn" disabled={!uploaded} onClick={() => next('extras')}>Looks good →</button></div>
+      </section>
+    </div></main>}
 
-    {step === 'extras' && <main><div className="grid"><section><div className="step">04 / Optional extras</div><h1 className="display">Want to make<br/>it <em>extra?</em></h1><p className="lede">Your portrait is already yours. These are just tempting little upgrades — completely optional.</p><div className="giftNote"><span>✦</span><div><strong>Your original gift stays ₹0</strong><small>Nothing here is required to redeem it.</small></div></div></section><section className="card"><div className="choices">{(Object.keys(extraData) as Exclude<Extra, ''>[]).map(key => { const item = extraData[key]; return <button key={key} className={`choice ${extra === key ? 'selected' : ''}`} onClick={() => setExtra(extra === key ? '' : key)}><span className="choiceTick">{extra === key ? '✓' : '+'}</span><div><strong>{item.name}</strong><small>{item.detail}</small></div><b>+ ₹{item.price.toLocaleString('en-IN')}</b></button> })}</div><div className="price"><span>{selectedExtra ? selectedExtra.name : 'Your gift'}</span><span className={selectedExtra ? '' : 'free'}>{selectedExtra ? `₹${price.toLocaleString('en-IN')}` : '₹0 · Included'}</span></div><div className="actions"><button className="back" onClick={() => next('create')}>← Back</button><button className="btn" onClick={() => next('delivery')}>{selectedExtra ? 'Continue with upgrade →' : 'No thanks — keep my gift'}</button></div></section></div></main>}
+    {step === 'extras' && <main><div className="grid">
+      <section><div className="step">04 / Optional extras</div><h1 className="display">Since you’re<br/><em>here...</em></h1><p className="lede">Your portrait is already yours. But we’ve got a few tempting ideas.</p><div className="giftNote"><span>✦</span><div><strong>Your original gift stays ₹0</strong><small>Nothing here is required to redeem it.</small></div></div></section>
+      <section className="card extrasCard"><div className="choices">{(Object.keys(extraData) as Exclude<Extra, ''>[]).map(key => { const item = extraData[key]; return <button key={key} className={`choice ${extra === key ? 'selected' : ''}`} onClick={() => setExtra(extra === key ? '' : key)}><span className="choiceTick">{extra === key ? '✓' : '+'}</span><div><small className="choiceTag">{item.tag}</small><strong>{item.name}</strong><small>{item.detail}</small></div><b>+ ₹{item.price.toLocaleString('en-IN')}</b></button> })}</div><div className="price"><span>{selectedExtra ? selectedExtra.name : 'Your gift'}</span><span className={selectedExtra ? '' : 'free'}>{selectedExtra ? `₹${price.toLocaleString('en-IN')}` : '₹0 · Included'}</span></div><div className="actions"><button className="back" onClick={() => next('create')}>← Back</button><button className="btn" onClick={() => next('delivery')}>{selectedExtra ? 'Keep this upgrade →' : 'No thanks — I’m good'}</button></div></section>
+    </div></main>}
 
-    {step === 'delivery' && <main><div className="grid"><section><div className="step">05 / Almost there</div><h1 className="display">Where should<br/>we <em>send it?</em></h1><p className="lede">One last thing. Then we’ll get your portrait moving.</p></section><section className="card"><div className="field"><label>DELIVERY ADDRESS</label><textarea rows={4} placeholder="House / Flat, street, city, state, PIN" /></div><div className="field"><label>PHONE NUMBER</label><input placeholder="+91 98765 43210" /></div><div className="price"><span>Tooned portrait</span><span className="free">₹0 · Gift</span></div>{selectedExtra && <div className="price"><span>{selectedExtra.name}</span><span>+ ₹{price.toLocaleString('en-IN')}</span></div>}<div className="actions"><button className="back" onClick={() => next('extras')}>← Back</button><button className="btn" onClick={() => next('done')}>{selectedExtra ? `Review ₹${price.toLocaleString('en-IN')} →` : 'Confirm my gift →'}</button></div></section></div></main>}
+    {step === 'delivery' && <main><div className="grid">
+      <section><div className="step">05 / Almost there</div><h1 className="display">Where should<br/>we <em>send it?</em></h1><p className="lede">One last thing. Then we’ll get your portrait moving.</p><div className="shippingNote"><span>↗</span><div><strong>Made for you. Sent to you.</strong><small>We’ll only use your number for delivery updates.</small></div></div></section>
+      <section className="card">
+        <div className="field"><label>DELIVERY ADDRESS</label><textarea rows={4} placeholder="House / Flat, street, city, state, PIN" value={address} onChange={e => setAddress(e.target.value)} /></div>
+        <div className="field"><label>PHONE NUMBER</label><input placeholder="+91 98765 43210" value={phone} onChange={e => setPhone(e.target.value)} /></div>
+        <div className="price"><span>Tooned portrait</span><span className="free">₹0 · Gift</span></div>{selectedExtra && <div className="price compact"><span>{selectedExtra.name}</span><span>+ ₹{price.toLocaleString('en-IN')}</span></div>}
+        {touched && !deliveryValid && <p className="error">Add a complete delivery address and 10-digit phone number.</p>}
+        <div className="actions"><button className="back" onClick={() => next('extras')}>← Back</button><button className="btn" onClick={() => { setTouched(true); if (deliveryValid) next('done') }}>{selectedExtra ? `Review ₹${price.toLocaleString('en-IN')} →` : 'Confirm my gift →'}</button></div>
+      </section>
+    </div></main>}
 
-    {step === 'done' && <main><section className="success"><div className="check">✓</div><div className="step">You’re officially Tooned</div><h1>That’s a<br/><em>wrap.</em></h1><p>Your portrait is on its way to becoming your new favourite thing. We’ll send the details to <strong>{email || 'your email'}</strong>.</p><div className="card" style={{ marginTop: 38, textAlign: 'left' }}><div className="price" style={{ borderTop: 0, marginTop: 0 }}><span>Gift code</span><strong className="mono">{code}</strong></div><div className="price"><span>Portrait</span><span className="free">Included</span></div>{selectedExtra && <div className="price"><span>{selectedExtra.name}</span><span>₹{price.toLocaleString('en-IN')}</span></div>}<div className="price"><span>Order status</span><strong>Confirmed ✦</strong></div></div><button className="btn" style={{ height: 52, marginTop: 25, padding: '0 30px' }} onClick={() => setStep('welcome')}>Back to beginning ↗</button></section></main>}
+    {step === 'done' && <main className="doneMain"><section className="success"><div className="check">✓</div><div className="step">You’re officially Tooned</div><h1>That’s a<br/><em>wrap.</em></h1><p>Your portrait is on its way to becoming your new favourite thing. We’ll send the details to <strong>{email || 'your email'}</strong>.</p><div className="nextSteps"><div><span>01</span><strong>We create your portrait</strong></div><i>↓</i><div><span>02</span><strong>We print it beautifully</strong></div><i>↓</i><div><span>03</span><strong>We send it your way</strong></div></div><div className="card receipt"><div className="price first"><span>Gift code</span><strong className="mono">{code}</strong></div><div className="price"><span>Portrait</span><span className="free">Included</span></div>{selectedExtra && <div className="price"><span>{selectedExtra.name}</span><span>₹{price.toLocaleString('en-IN')}</span></div>}<div className="price"><span>Order status</span><strong>Confirmed ✦</strong></div></div><button className="btn" style={{ height: 52, marginTop: 25, padding: '0 30px' }} onClick={() => setStep('welcome')}>Back to beginning ↗</button></section></main>}
   </div>
 }
 
-function Art() { return <div className="art" aria-hidden="true"><div className="sun"/><div className="blob"/><div className="spark s1">✦</div><div className="spark s2">✳</div><div className="face"><div className="hair"/><div className="eye l"/><div className="eye r"/><div className="smile"/><div className="shirt"/></div></div> }
+function Art() { return <div className="art" aria-hidden="true"><div className="sun"/><div className="blob"/><div className="spark s1">✦</div><div className="spark s2">✳</div><div className="face"><div className="hair"/><div className="eye l"/><div className="eye r"/><div className="smile"/><div className="shirt"/></div><div className="artLabel">TOONED / 01</div></div> }
