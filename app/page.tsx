@@ -24,6 +24,9 @@ export default function Home() {
   const [address, setAddress] = useState('')
   const [phone, setPhone] = useState('')
   const [touched, setTouched] = useState(false)
+  const [codeError, setCodeError] = useState('')
+  const [checkingCode, setCheckingCode] = useState(false)
+  const [redemptionId, setRedemptionId] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -40,6 +43,59 @@ export default function Home() {
   const detailsValid = name.trim().length > 1 && email.includes('@')
   const deliveryValid = address.trim().length > 8 && phone.replace(/\D/g, '').length >= 10
   const next = (s: Step) => setStep(s)
+
+  async function validateCode() {
+    const normalized = code.trim().toUpperCase()
+    if (!normalized) {
+      setCodeError('Enter your gift code to continue.')
+      return
+    }
+    setCheckingCode(true)
+    setCodeError('')
+    try {
+      const response = await fetch(`/api/gift-codes/${encodeURIComponent(normalized)}`)
+      const data = await response.json()
+      if (!response.ok || !data.valid) {
+        const message = data.reason === 'already_redeemed'
+          ? 'This gift code has already been redeemed.'
+          : data.reason === 'void'
+            ? 'This gift code is no longer active.'
+            : data.reason === 'expired'
+              ? 'This gift code has expired.'
+              : 'We couldn’t find that gift code. Check it and try again.'
+        setCodeError(message)
+        return
+      }
+      next('details')
+    } catch {
+      setCodeError('We couldn’t check that code right now. Please try again.')
+    } finally {
+      setCheckingCode(false)
+    }
+  }
+
+  async function startRedemption() {
+    if (!detailsValid) return
+    try {
+      const response = await fetch('/api/redemptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, name, email }),
+      })
+      const data = await response.json()
+      if (!response.ok || !data.ok) {
+        if (data.reason === 'already_redeemed') setCodeError('This gift code has already been redeemed.')
+        else setCodeError('We couldn’t start your redemption. Please try again.')
+        next('welcome')
+        return
+      }
+      setRedemptionId(data.redemptionId)
+      next('create')
+    } catch {
+      setCodeError('We couldn’t start your redemption. Please try again.')
+      next('welcome')
+    }
+  }
 
   function handleFile(file?: File) {
     if (!file) return
@@ -65,8 +121,8 @@ export default function Home() {
           <h1>Your portrait is <em>waiting.</em></h1>
           <p className="lede">Someone thought you deserved a little more personality. Your custom Tooned portrait is already yours — just make it you.</p>
           <div className="giftLine"><span>✦</span> No shopping. No checkout. Just your portrait.</div>
-          <div className="codebox"><input value={code} onChange={e => setCode(e.target.value.toUpperCase())} aria-label="Gift code" /><button className="btn" onClick={() => next('details')}>Let’s go →</button></div>
-          <p className="tiny">Gift code detected · your portrait is included</p>
+          <div className="codebox"><input value={code} onChange={e => { setCode(e.target.value.toUpperCase()); setCodeError('') }} aria-label="Gift code" /><button className="btn" disabled={checkingCode} onClick={validateCode}>{checkingCode ? 'Checking…' : 'Let’s go →'}</button></div>
+          {codeError ? <p className="error">{codeError}</p> : <p className="tiny">Gift code detected · your portrait is included</p>}
         </section>
         <Art />
       </div>
@@ -78,7 +134,7 @@ export default function Home() {
         <div className="field"><label>YOUR NAME</label><input autoFocus placeholder="e.g. Ankur" value={name} onChange={e => setName(e.target.value)} /></div>
         <div className="field"><label>EMAIL ADDRESS</label><input type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} /></div>
         <div className="cardHint">We’ll send your confirmation and delivery updates here.</div>
-        <div className="actions"><button className="back" onClick={() => next('welcome')}>← Back</button><button className="btn" disabled={!detailsValid} onClick={() => next('create')}>Create my portrait →</button></div>
+        <div className="actions"><button className="back" onClick={() => next('welcome')}>← Back</button><button className="btn" disabled={!detailsValid} onClick={startRedemption}>Create my portrait →</button></div>
       </section>
     </div></main>}
 
