@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { getDb } from '../../../../lib/db'
+import { exportRedemption } from '../../../../lib/fulfillment'
 
 function verifyStripeSignature(payload: string, signature: string, secret: string) {
   const parts = signature.split(',')
@@ -62,6 +63,11 @@ export async function POST(request: Request) {
           AND status = 'in_progress'
       `,
     ])
+
+    const exportResult = await exportRedemption(redemptionId)
+    if (!exportResult.ok && !exportResult.skipped) {
+      console.warn('Paid redemption completed but fulfillment export failed', redemptionId)
+    }
 
     return NextResponse.json({ received: true })
   } catch (error) {
