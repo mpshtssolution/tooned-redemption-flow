@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { getDb } from '../../../../lib/db'
+import { exportRedemption } from '../../../../lib/fulfillment'
 
 function hashCode(code: string) {
   return createHash('sha256').update(code.trim().toUpperCase()).digest('hex')
@@ -51,6 +52,11 @@ export async function POST(request: Request) {
     const redemption = results[0][0] as { id: string; gift_code_id: string; gift_status: string } | undefined
     if (!redemption) {
       return NextResponse.json({ ok: false, reason: 'not_found' }, { status: 404 })
+    }
+
+    const exportResult = await exportRedemption(redemptionId)
+    if (!exportResult.ok && !exportResult.skipped) {
+      console.warn('Redemption completed but fulfillment export failed', redemptionId)
     }
 
     if (redemption.gift_status === 'redeemed') {
